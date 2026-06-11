@@ -34,4 +34,4 @@ const firebaseConfig = {
  * When false the entire auth/sync layer is dormant — no errors,
  * no network calls, nothing visible to the user.
  */
-const FIREBASE_ENABLED = false;
+const FIREBASE_ENABLED = true;
