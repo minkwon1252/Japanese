@@ -5,6 +5,7 @@
 ═══════════════════════════════════════════════════════════════ */
 const App = {
   route: '/',
+  user:  null,
   pendingAchievements: [],
 
   kana: {
@@ -82,6 +83,7 @@ function render() {
     '/vocabulary':         renderVocabMenu,
     '/vocabulary/mode':    renderVocabModeSelect,
     '/vocabulary/learn':   renderVocabLearn,
+    '/profile':            renderProfile,
     '/vocabulary/quiz':    renderVocabQuiz,
     '/vocabulary/type':    renderVocabType,
     '/vocabulary/listen':  renderVocabListen,
@@ -117,6 +119,36 @@ function updateNavStats() {
   if (xp)     xp.textContent     = `${p.xp} XP`;
   if (level)  level.textContent  = `${lvl.current.badge} ${lvl.current.name}`;
   if (chip)   chip.style.setProperty('--chip-color', lvl.current.color);
+  updateAuthUI(App.user);
+}
+
+function updateAuthUI(user) {
+  const signinBtn = document.getElementById('auth-signin-btn');
+  const userChip  = document.getElementById('auth-user-chip');
+  const aucAvatar = document.getElementById('auc-avatar');
+  const aucName   = document.getElementById('auc-name');
+
+  const firebaseReady = typeof FIREBASE_ENABLED !== 'undefined' && FIREBASE_ENABLED;
+  if (!firebaseReady) return;
+
+  if (user) {
+    signinBtn?.setAttribute('hidden', '');
+    userChip?.removeAttribute('hidden');
+    const name   = user.displayName || user.email || 'User';
+    const avatar = (user.displayName || user.email || '?')[0].toUpperCase();
+    if (aucAvatar) aucAvatar.textContent = avatar;
+    if (aucName)   aucName.textContent   = name.split('@')[0];
+  } else {
+    signinBtn?.removeAttribute('hidden');
+    userChip?.setAttribute('hidden', '');
+  }
+}
+
+function toggleAuthMenu() {
+  const menu = document.getElementById('auth-menu');
+  if (!menu) return;
+  if (menu.hasAttribute('hidden')) menu.removeAttribute('hidden');
+  else menu.setAttribute('hidden', '');
 }
 
 function toggleTheme() {
@@ -538,6 +570,7 @@ function renderKanaGame() {
   <div class="kana-display" id="kana-display">
     <div class="kana-char" id="kana-char">?</div>
     <div class="kana-type-tag" id="kana-type-tag"></div>
+    <div class="kana-answer-feedback" id="kana-feedback" hidden></div>
   </div>
 
   <div class="kana-input-row">
@@ -545,12 +578,11 @@ function renderKanaGame() {
       type="text"
       id="kana-input"
       class="kana-input"
-      placeholder="Type romaji..."
+      placeholder="Type romaji and press Enter…"
       autocomplete="off"
       autocorrect="off"
       autocapitalize="off"
       spellcheck="false"
-      oninput="handleKanaInput(event)"
       onkeydown="handleKanaInput(event)"
     />
   </div>
@@ -619,78 +651,59 @@ function nextKanaChar() {
   if (tagEl) tagEl.textContent = s.current.type === 'hiragana' ? 'Hiragana' : s.current.type === 'katakana' ? 'Katakana' : '';
 }
 
+/*
+ * handleKanaInput — Enter-only validation.
+ *
+ * Nothing happens while the user types.
+ * On Enter: validate the full typed string, show coloured feedback
+ * for 350ms (correct) or 750ms (wrong), then advance.
+ *
+ * Why Enter-only?
+ *   Auto-submit on exact prefix match causes combined kana (gyo, sha,
+ *   ryo…) to fire mid-word when a shorter alternative happens to match.
+ *   Enter-only lets the user type the full answer at their own pace.
+ */
 function handleKanaInput(e) {
-  const s     = App.kana;
-  const input = e.target;
+  const s = App.kana;
   if (!s.current || !s.playing) return;
+  if (e.type !== 'keydown' || e.key !== 'Enter') return;
 
-  /* ── keydown: only act on Enter (explicit wrong submission) ── */
-  if (e.type === 'keydown') {
-    if (e.key !== 'Enter') return;
-    const val = input.value.toLowerCase().trim();
-    if (val.length > 0) {
-      const valid = [s.current.romaji, ...(s.current.alts || [])];
-      if (!valid.includes(val)) {
-        input.value = '';
-        flashInputWrong(input);
-        handleKanaWrong();
-        nextKanaChar();
-      }
-    }
-    return;
-  }
-
-  /* ── input event: check on every keystroke ───────────────── */
-  const val = input.value.toLowerCase();
+  const input = e.target;
+  const val   = input.value.toLowerCase().trim();
   if (!val) return;
 
+  input.value = '';
   const valid = [s.current.romaji, ...(s.current.alts || [])];
-
-  /* Exact match → correct */
   if (valid.includes(val)) {
-    kanaCorrect(val);
-    return;
-  }
-
-  /* Not a prefix of any valid romaji → immediately wrong */
-  if (!valid.some(v => v.startsWith(val))) {
-    input.value = '';
-    flashInputWrong(input);
-    handleKanaWrong();
-    nextKanaChar();
+    submitKanaCorrect();
+  } else {
+    submitKanaWrong(val);
   }
 }
 
-function flashInputWrong(input) {
-  input.classList.add('input-wrong-flash');
-  setTimeout(() => input.classList.remove('input-wrong-flash'), 400);
-}
-
-function kanaCorrect(typed) {
+function submitKanaCorrect() {
   const s = App.kana;
-  s.correctChars.push(s.current.char);  // record for progress tracking
+  s.correctChars.push(s.current.char);
   s.combo++;
   s.correct++;
   s.total++;
   if (s.combo > s.maxCombo) s.maxCombo = s.combo;
+  s.score += Math.round(10 * Math.min(1 + (s.combo - 1) * 0.1, 3));
 
-  const multiplier = Math.min(1 + (s.combo - 1) * 0.1, 3);
-  const points     = Math.round(10 * multiplier);
-  s.score += points;
-
-  updateKanaGameUI();
   Audio.correct();
   if (s.combo >= 5) Audio.combo();
-
   flashKanaChar('correct');
+  showKanaFeedback('correct', `✓ ${s.current.romaji}`);
+  updateKanaGameUI();
 
-  const input = document.getElementById('kana-input');
-  if (input) input.value = '';
-
-  nextKanaChar();
+  setTimeout(() => {
+    hideKanaFeedback();
+    nextKanaChar();
+    document.getElementById('kana-input')?.focus();
+  }, 350);
 }
 
-function handleKanaWrong() {
+function submitKanaWrong(typed) {
   const s = App.kana;
   s.wrong++;
   s.total++;
@@ -698,9 +711,36 @@ function handleKanaWrong() {
   if (s.current && !s.missed.find(m => m.char === s.current.char)) {
     s.missed.push({ char: s.current.char, romaji: s.current.romaji });
   }
+
   Audio.wrong();
   flashKanaChar('wrong');
+  flashInputWrong(document.getElementById('kana-input'));
+  showKanaFeedback('wrong', `✗  Answer: ${s.current.romaji}`);
   updateKanaGameUI();
+
+  setTimeout(() => {
+    hideKanaFeedback();
+    nextKanaChar();
+    document.getElementById('kana-input')?.focus();
+  }, 750);
+}
+
+function showKanaFeedback(type, text) {
+  const el = document.getElementById('kana-feedback');
+  if (!el) return;
+  el.textContent = text;
+  el.className   = `kana-answer-feedback kana-feedback-${type}`;
+  el.removeAttribute('hidden');
+}
+
+function hideKanaFeedback() {
+  document.getElementById('kana-feedback')?.setAttribute('hidden', '');
+}
+
+function flashInputWrong(input) {
+  if (!input) return;
+  input.classList.add('input-wrong-flash');
+  setTimeout(() => input.classList.remove('input-wrong-flash'), 400);
 }
 
 function flashKanaChar(type) {
@@ -1671,8 +1711,15 @@ function renderProgress() {
   const lvl = getLevelInfo(p.xp);
   const progressPct = Math.min(100, lvl.progress).toFixed(1);
 
-  const hiBasic   = KANA.hiragana.easy;
-  const kaBasic   = KANA.katakana.easy;
+  /* Legend shared by every kana grid */
+  const LEGEND = `
+  <div class="mastery-legend">
+    <span class="ml-item kg-mastered">Mastered</span>
+    <span class="ml-item kg-learning">Occasionally wrong</span>
+    <span class="ml-item kg-struggling">Frequently wrong</span>
+    <span class="ml-item kg-critical">Consistently wrong</span>
+    <span class="ml-item kg-unseen">Unseen</span>
+  </div>`;
 
   const kanaStats = (set, label) => {
     const mastered = set.filter(k => Progress.isMastered(k.char)).length;
@@ -1695,13 +1742,7 @@ function renderProgress() {
       >${k.char}</div>`;
     }).join('')}
   </div>
-  <div class="mastery-legend">
-    <span class="ml-item kg-mastered">Mastered</span>
-    <span class="ml-item kg-familiar">Familiar</span>
-    <span class="ml-item kg-learning">Learning</span>
-    <span class="ml-item kg-struggling">Struggling</span>
-    <span class="ml-item kg-unseen">Unseen</span>
-  </div>
+  ${LEGEND}
 </div>`;
   };
 
@@ -1745,9 +1786,15 @@ function renderProgress() {
     </div>
   </div>
 
-  <h2 class="section-title">Kana Mastery</h2>
-  ${kanaStats(hiBasic, 'Hiragana (basic)')}
-  ${kanaStats(kaBasic, 'Katakana (basic)')}
+  <h2 class="section-title">Kana Mastery — Hiragana</h2>
+  ${kanaStats(HIRAGANA_BASIC,    'Basic (46 characters)')}
+  ${kanaStats(HIRAGANA_DAKUTEN,  'Voiced &amp; Semi-voiced (25 characters)')}
+  ${kanaStats(HIRAGANA_COMBOS,   'Combinations — Yōon (33 characters)')}
+
+  <h2 class="section-title">Kana Mastery — Katakana</h2>
+  ${kanaStats(KATAKANA_BASIC,    'Basic (46 characters)')}
+  ${kanaStats(KATAKANA_DAKUTEN,  'Voiced &amp; Semi-voiced (25 characters)')}
+  ${kanaStats(KATAKANA_COMBOS,   'Combinations — Yōon (33 characters)')}
 
   <h2 class="section-title">Vocabulary</h2>
   <div class="vocab-prog-card">
@@ -1801,6 +1848,183 @@ function animateProgressBars() {
 }
 
 /* ═══════════════════════════════════════════════════════════════
+   PROFILE PAGE
+═══════════════════════════════════════════════════════════════ */
+function renderProfile() {
+  const p    = Progress.get();
+  const lvl  = getLevelInfo(p.xp);
+  const user = App.user;
+  const firebaseReady = typeof FIREBASE_ENABLED !== 'undefined' && FIREBASE_ENABLED;
+  const joinDate = user?.metadata?.creationTime
+    ? new Date(user.metadata.creationTime).toLocaleDateString() : null;
+
+  return `
+<div class="profile-page">
+  <button class="back-btn" onclick="navigate('/')">← Back</button>
+  <h1 class="page-title">👤 Profile</h1>
+
+  ${user ? `
+  <div class="profile-card">
+    <div class="profile-avatar-lg">${(user.displayName || user.email || '?')[0].toUpperCase()}</div>
+    <div class="profile-details">
+      <h2>${user.displayName || 'User'}</h2>
+      <p class="profile-email">${user.email}</p>
+      ${joinDate ? `<p class="profile-joined">Joined ${joinDate}</p>` : ''}
+    </div>
+    <button class="btn btn-ghost btn-sm" onclick="handleSignOut()">Log Out</button>
+  </div>
+
+  <div class="cloud-status-card success">
+    <span class="cs-icon">☁️</span>
+    <div class="cs-body">
+      <strong>Cloud Sync Active</strong>
+      <span>Progress saves automatically after each session.</span>
+    </div>
+    <button class="btn btn-secondary btn-sm" onclick="syncNow()">Sync Now</button>
+  </div>
+  ` : firebaseReady ? `
+  <div class="cloud-status-card">
+    <span class="cs-icon">☁️</span>
+    <div class="cs-body">
+      <strong>Not signed in</strong>
+      <span>Sign in to save your progress to the cloud.</span>
+    </div>
+    <button class="btn btn-primary btn-sm" onclick="openAuthModal()">Sign In</button>
+  </div>
+  ` : `
+  <div class="cloud-status-card">
+    <span class="cs-icon">💾</span>
+    <div class="cs-body">
+      <strong>Local storage only</strong>
+      <span>See README to enable cloud sync with Firebase.</span>
+    </div>
+  </div>
+  `}
+
+  <div class="profile-stats-card">
+    <h3>Your Stats</h3>
+    <div class="ps-grid">
+      <div class="ps-item"><span class="ps-num">${lvl.current.badge} ${lvl.current.name}</span><span>Level ${lvl.current.level}</span></div>
+      <div class="ps-item"><span class="ps-num">${p.xp}</span><span>Total XP</span></div>
+      <div class="ps-item"><span class="ps-num">${p.streak}</span><span>Day Streak</span></div>
+      <div class="ps-item"><span class="ps-num">${p.gamesPlayed}</span><span>Games Played</span></div>
+      <div class="ps-item"><span class="ps-num">${p.totalCorrectKana}</span><span>Kana Correct</span></div>
+      <div class="ps-item"><span class="ps-num">${p.vocabLearned.length}</span><span>Words Learned</span></div>
+      <div class="ps-item"><span class="ps-num">${p.achievements.length}/${ACHIEVEMENTS.length}</span><span>Achievements</span></div>
+      <div class="ps-item">
+        <span class="ps-num">${p.totalAnswers > 0 ? Math.round((p.totalCorrectKana/p.totalAnswers)*100) : 0}%</span>
+        <span>Accuracy</span>
+      </div>
+    </div>
+  </div>
+</div>`;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   AUTH MODAL
+═══════════════════════════════════════════════════════════════ */
+function openAuthModal() {
+  const overlay = document.getElementById('auth-modal-overlay');
+  if (!overlay) return;
+  overlay.removeAttribute('hidden');
+  document.getElementById('login-email')?.focus();
+}
+
+function closeAuthModal() {
+  document.getElementById('auth-modal-overlay')?.setAttribute('hidden', '');
+  clearAuthErrors();
+}
+
+function handleAuthOverlayClick(e) {
+  if (e.target === document.getElementById('auth-modal-overlay')) closeAuthModal();
+}
+
+function switchAuthTab(tab) {
+  document.querySelectorAll('.auth-tab').forEach(t =>
+    t.classList.toggle('active', t.dataset.tab === tab));
+  document.getElementById('auth-login-form')?.toggleAttribute('hidden', tab !== 'login');
+  document.getElementById('auth-register-form')?.toggleAttribute('hidden', tab !== 'register');
+  clearAuthErrors();
+}
+
+function clearAuthErrors() {
+  ['login-error','register-error'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) { el.textContent = ''; el.setAttribute('hidden',''); }
+  });
+}
+
+function showAuthError(formType, msg) {
+  const el = document.getElementById(`${formType}-error`);
+  if (!el) return;
+  el.textContent = msg;
+  el.removeAttribute('hidden');
+}
+
+function setAuthLoading(formType, loading) {
+  const btn = document.getElementById(`${formType}-submit`);
+  if (!btn) return;
+  btn.disabled    = loading;
+  btn.textContent = loading
+    ? (formType === 'login' ? 'Logging in…' : 'Creating account…')
+    : (formType === 'login' ? 'Log In' : 'Create Account');
+}
+
+async function handleLogin(e) {
+  e.preventDefault();
+  clearAuthErrors();
+  const email    = document.getElementById('login-email')?.value.trim();
+  const password = document.getElementById('login-password')?.value;
+  if (!email || !password) return;
+
+  setAuthLoading('login', true);
+  try {
+    await Auth.signIn(email, password);
+    closeAuthModal();
+    toast('Signed in! Progress synced.', 'success');
+  } catch (err) {
+    showAuthError('login', err.message);
+  } finally {
+    setAuthLoading('login', false);
+  }
+}
+
+async function handleRegister(e) {
+  e.preventDefault();
+  clearAuthErrors();
+  const username = document.getElementById('reg-username')?.value.trim();
+  const email    = document.getElementById('reg-email')?.value.trim();
+  const password = document.getElementById('reg-password')?.value;
+  if (!username || !email || !password) return;
+
+  setAuthLoading('register', true);
+  try {
+    await Auth.signUp(email, password, username);
+    closeAuthModal();
+    toast(`Welcome, ${username}! Account created.`, 'success');
+  } catch (err) {
+    showAuthError('register', err.message);
+  } finally {
+    setAuthLoading('register', false);
+  }
+}
+
+async function handleSignOut() {
+  await Auth.signOut();
+  App.user = null;
+  updateNavStats();
+  toast('Signed out. Progress still saved locally.', 'info');
+  if (App.route === '/profile') navigate('/');
+}
+
+async function syncNow() {
+  const user = Auth.getCurrentUser();
+  if (!user) { toast('Not signed in.', 'warning'); return; }
+  const ok = await CloudSync.saveProgress(user.uid, Progress.get());
+  toast(ok ? '☁️ Synced to cloud!' : 'Sync failed. Try again.', ok ? 'success' : 'error');
+}
+
+/* ═══════════════════════════════════════════════════════════════
    INIT
 ═══════════════════════════════════════════════════════════════ */
 function init() {
@@ -1814,6 +2038,32 @@ function init() {
   }
 
   Audio.setEnabled(p.settings?.soundEnabled !== false);
+
+  /* Firebase auth — only when enabled */
+  if (typeof FIREBASE_ENABLED !== 'undefined' && FIREBASE_ENABLED) {
+    Auth.init();
+    Auth.onAuthStateChanged(async (user) => {
+      App.user = user;
+      updateAuthUI(user);
+
+      if (user) {
+        /* Load cloud data and replace local state if available */
+        const cloud = await CloudSync.loadProgress(user.uid);
+        if (cloud) {
+          Progress.loadFromCloud(cloud);
+        } else {
+          /* First login on this device — migrate localStorage if present */
+          const migKey = `koharu_migrated_${user.uid}`;
+          if (!localStorage.getItem(migKey)) {
+            await CloudSync.migrateFromLocalStorage(user.uid);
+          }
+        }
+        updateNavStats();
+        if (App.route === '/') render();
+      }
+    });
+  }
+
   Progress.updateStreak();
   render();
 }

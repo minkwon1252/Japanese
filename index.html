@@ -10,24 +10,26 @@
   <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
+
+  <!-- ── Navigation ──────────────────────────────────────────── -->
   <nav class="navbar" id="navbar">
     <button class="nav-logo" onclick="navigate('/')">
       <span class="logo-sakura">🌸</span>
       <span class="logo-text">Koharu</span>
     </button>
+
     <div class="nav-stats" id="nav-stats">
       <div class="stat-chip streak-chip">
-        <span>🔥</span>
-        <span id="nav-streak">0</span>
+        <span>🔥</span><span id="nav-streak">0</span>
       </div>
       <div class="stat-chip xp-chip">
-        <span>⚡</span>
-        <span id="nav-xp">0 XP</span>
+        <span>⚡</span><span id="nav-xp">0 XP</span>
       </div>
       <div class="stat-chip level-chip" id="level-chip">
         <span id="nav-level">Lv.1</span>
       </div>
     </div>
+
     <div class="nav-actions">
       <button class="icon-btn" id="theme-btn" title="Toggle theme" onclick="toggleTheme()">
         <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
@@ -39,19 +41,107 @@
           <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
         </svg>
       </button>
+
+      <!-- Auth: sign-in button (visible when logged out + Firebase enabled) -->
+      <button class="btn btn-primary btn-sm auth-signin-btn" id="auth-signin-btn"
+              onclick="openAuthModal()" hidden title="Sign in for cloud sync">
+        ☁️ Sign In
+      </button>
+
+      <!-- Auth: user chip (visible when logged in) -->
+      <div class="auth-user-chip" id="auth-user-chip" hidden>
+        <span class="auc-avatar" id="auc-avatar">?</span>
+        <button class="auc-name" id="auc-name" onclick="navigate('/profile')">—</button>
+        <button class="icon-btn auc-menu-btn" onclick="toggleAuthMenu()" title="Account menu">▾</button>
+        <div class="auth-menu" id="auth-menu" hidden>
+          <button onclick="navigate('/profile'); toggleAuthMenu()">👤 Profile</button>
+          <button onclick="syncNow()">☁️ Sync Now</button>
+          <button onclick="handleSignOut()">🚪 Log Out</button>
+        </div>
+      </div>
     </div>
   </nav>
 
+  <!-- ── Main content ─────────────────────────────────────────── -->
   <main id="app" class="app-main"></main>
 
+  <!-- ── Toast notifications ──────────────────────────────────── -->
   <div id="toasts" class="toast-container" aria-live="polite"></div>
   <div id="xp-burst" class="xp-burst" aria-hidden="true"></div>
   <canvas id="confetti-canvas" class="confetti-canvas" aria-hidden="true"></canvas>
 
+  <!-- ── Generic modal (level-up, etc.) ───────────────────────── -->
   <div id="modal-overlay" class="modal-overlay" onclick="handleModalOverlayClick(event)">
     <div class="modal" id="modal-content" role="dialog"></div>
   </div>
 
+  <!-- ── Auth modal ────────────────────────────────────────────── -->
+  <div id="auth-modal-overlay" class="modal-overlay" onclick="handleAuthOverlayClick(event)" hidden>
+    <div class="modal auth-modal" role="dialog" aria-modal="true" aria-labelledby="auth-modal-title">
+      <button class="auth-close" onclick="closeAuthModal()" aria-label="Close">&times;</button>
+      <h2 id="auth-modal-title" class="auth-title">Welcome to Koharu</h2>
+      <p class="auth-subtitle">Save progress to the cloud and sync across devices.</p>
+
+      <div class="auth-tabs" role="tablist">
+        <button class="auth-tab active" role="tab" data-tab="login"    onclick="switchAuthTab('login')">Log In</button>
+        <button class="auth-tab"        role="tab" data-tab="register" onclick="switchAuthTab('register')">Register</button>
+      </div>
+
+      <!-- Login form -->
+      <form id="auth-login-form" class="auth-form" onsubmit="handleLogin(event)" novalidate>
+        <div class="auth-field">
+          <label for="login-email">Email</label>
+          <input type="email" id="login-email" autocomplete="email" required placeholder="you@example.com">
+        </div>
+        <div class="auth-field">
+          <label for="login-password">Password</label>
+          <input type="password" id="login-password" autocomplete="current-password" required placeholder="••••••••">
+        </div>
+        <p class="auth-error" id="login-error" hidden></p>
+        <button type="submit" class="btn btn-primary btn-wide" id="login-submit">Log In</button>
+      </form>
+
+      <!-- Register form (hidden initially) -->
+      <form id="auth-register-form" class="auth-form" onsubmit="handleRegister(event)" novalidate hidden>
+        <div class="auth-field">
+          <label for="reg-username">Username</label>
+          <input type="text" id="reg-username" autocomplete="username" required
+                 minlength="3" maxlength="20" placeholder="YourName">
+        </div>
+        <div class="auth-field">
+          <label for="reg-email">Email</label>
+          <input type="email" id="reg-email" autocomplete="email" required placeholder="you@example.com">
+        </div>
+        <div class="auth-field">
+          <label for="reg-password">Password <small>(min 6 chars)</small></label>
+          <input type="password" id="reg-password" autocomplete="new-password" required
+                 minlength="6" placeholder="••••••••">
+        </div>
+        <p class="auth-error" id="register-error" hidden></p>
+        <button type="submit" class="btn btn-primary btn-wide" id="register-submit">Create Account</button>
+      </form>
+
+      <div class="auth-divider"><span>or</span></div>
+      <button class="btn btn-ghost btn-wide" onclick="closeAuthModal()">
+        Continue without account
+      </button>
+    </div>
+  </div>
+
+  <!-- ── Firebase SDK (loaded only when config is present) ────── -->
+  <!--
+    Uncomment these three lines once you have set FIREBASE_ENABLED = true
+    in js/firebase-config.js
+
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
+  -->
+
+  <!-- ── Application scripts ──────────────────────────────────── -->
+  <script src="js/firebase-config.js"></script>
+  <script src="js/auth.js"></script>
+  <script src="js/cloud-sync.js"></script>
   <script src="js/data.js"></script>
   <script src="js/progress.js"></script>
   <script src="js/audio.js"></script>
