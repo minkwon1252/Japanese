@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Koharu — Learn Japanese</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800;900&family=Noto+Sans+JP:wght@400;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <nav class="navbar" id="navbar">
+    <button class="nav-logo" onclick="navigate('/')">
+      <span class="logo-sakura">🌸</span>
+      <span class="logo-text">Koharu</span>
+    </button>
+    <div class="nav-stats" id="nav-stats">
+      <div class="stat-chip streak-chip">
+        <span>🔥</span>
+        <span id="nav-streak">0</span>
+      </div>
+      <div class="stat-chip xp-chip">
+        <span>⚡</span>
+        <span id="nav-xp">0 XP</span>
+      </div>
+      <div class="stat-chip level-chip" id="level-chip">
+        <span id="nav-level">Lv.1</span>
+      </div>
+    </div>
+    <div class="nav-actions">
+      <button class="icon-btn" id="theme-btn" title="Toggle theme" onclick="toggleTheme()">
+        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <path id="theme-icon-path" d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+        </svg>
+      </button>
+      <button class="icon-btn" onclick="navigate('/progress')" title="My Progress">
+        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+        </svg>
+      </button>
+    </div>
+  </nav>
+
+  <main id="app" class="app-main"></main>
+
+  <div id="toasts" class="toast-container" aria-live="polite"></div>
+  <div id="xp-burst" class="xp-burst" aria-hidden="true"></div>
+  <canvas id="confetti-canvas" class="confetti-canvas" aria-hidden="true"></canvas>
+
+  <div id="modal-overlay" class="modal-overlay" onclick="handleModalOverlayClick(event)">
+    <div class="modal" id="modal-content" role="dialog"></div>
+  </div>
+
+  <script src="js/data.js"></script>
+  <script src="js/progress.js"></script>
+  <script src="js/audio.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
