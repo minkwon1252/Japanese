@@ -7,7 +7,7 @@ A modern, gamified Japanese learning website covering hiragana, katakana, and vo
 Once deployed, your site lives at:
 
 ```
-https://<your-github-username>.github.io/<repo-name>/
+https://minkwon1252.github.io/Japanese/
 ```
 
 ---
