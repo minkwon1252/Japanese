@@ -19,13 +19,14 @@
  *  8. Set FIREBASE_ENABLED = true
  */
 
-const FIREBASE_CONFIG = {
-  apiKey:            'YOUR_API_KEY',
-  authDomain:        'YOUR_PROJECT_ID.firebaseapp.com',
-  projectId:         'YOUR_PROJECT_ID',
-  storageBucket:     'YOUR_PROJECT_ID.appspot.com',
-  messagingSenderId: 'YOUR_MESSAGING_SENDER_ID',
-  appId:             'YOUR_APP_ID',
+const firebaseConfig = {
+  apiKey: "AIzaSyAwAfjdcKQnrPp4fSQvgfb6a3W1f-uYmmc",
+  authDomain: "japanese-b6298.firebaseapp.com",
+  projectId: "japanese-b6298",
+  storageBucket: "japanese-b6298.firebasestorage.app",
+  messagingSenderId: "389551796630",
+  appId: "1:389551796630:web:815970252de6a8a3feedb7",
+  measurementId: "G-LT61YH59FM"
 };
 
 /*
