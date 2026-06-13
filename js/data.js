@@ -298,3 +298,58 @@ function shuffle(arr) {
 function getKanaSet(mode, difficulty) {
   return shuffle(KANA[mode][difficulty]);
 }
+
+/* ═══════════════════════════════════════════════════════════════
+   POKÉMON  —  data for the "Catch-'em Typing Battle" game.
+
+   Each Pokémon's name is shown in KATAKANA (the script real Japanese
+   games use for Pokémon names), so catching them is genuine katakana
+   reading practice.  `romaji` is the strict reading; `alts` accepts
+   common spellings + the familiar English name.  `el` picks the
+   element colour used in the UI.
+═══════════════════════════════════════════════════════════════ */
+const POKE_TYPE_COLOR = {
+  electric: '#F2C200',
+  fire:     '#F0803C',
+  water:    '#5C9BE6',
+  grass:    '#6FBF4F',
+  ghost:    '#6E5A97',
+  dragon:   '#6F44D8',
+  normal:   '#A0A07A',
+  psychic:  '#F25C8A',
+  dark:     '#4C4456',
+  fighting: '#C0392B',
+  fairy:    '#EE99AC',
+};
+
+const POKEMON = [
+  /* ── The favourites ── */
+  { name: 'ゼラオラ',   romaji: 'zeraora',  alts: ['zeraora'],            el: 'electric', emoji: '⚡', star: true },
+  { name: 'ルカリオ',   romaji: 'rukario',  alts: ['lucario', 'rukario'], el: 'fighting', emoji: '🥋', star: true },
+  { name: 'ゾロアーク', romaji: 'zoroaku',  alts: ['zoroark', 'zoroaaku', 'zoroaku'], el: 'dark', emoji: '🦊', star: true },
+
+  /* ── Crowd favourites ── */
+  { name: 'ピカチュウ', romaji: 'pikachu',  alts: ['pikachuu', 'pikachu'], el: 'electric', emoji: '⚡' },
+  { name: 'リザードン', romaji: 'rizadon',  alts: ['rizaadon', 'rizadon', 'charizard'], el: 'fire', emoji: '🔥' },
+  { name: 'フシギダネ', romaji: 'fushigidane', alts: ['bulbasaur'],        el: 'grass',    emoji: '🌿' },
+  { name: 'ヒトカゲ',   romaji: 'hitokage', alts: ['charmander'],          el: 'fire',     emoji: '🔥' },
+  { name: 'ゼニガメ',   romaji: 'zenigame', alts: ['squirtle'],            el: 'water',    emoji: '💧' },
+  { name: 'イーブイ',   romaji: 'ibui',     alts: ['iibui', 'ibui', 'eevee'], el: 'normal', emoji: '✨' },
+  { name: 'ミュウ',     romaji: 'myu',      alts: ['myuu', 'myu', 'mew'],  el: 'psychic',  emoji: '🔮' },
+  { name: 'ミュウツー', romaji: 'myutsu',   alts: ['myuutsuu', 'myutsu', 'mewtwo'], el: 'psychic', emoji: '🔮' },
+  { name: 'ゲンガー',   romaji: 'genga',    alts: ['gengaa', 'genga', 'gengar'], el: 'ghost', emoji: '👻' },
+  { name: 'カビゴン',   romaji: 'kabigon',  alts: ['snorlax'],             el: 'normal',   emoji: '😴' },
+  { name: 'ニャース',   romaji: 'nyasu',    alts: ['nyaasu', 'nyasu', 'meowth'], el: 'normal', emoji: '🐱' },
+  { name: 'プリン',     romaji: 'purin',    alts: ['jigglypuff'],          el: 'fairy',    emoji: '🎈' },
+  { name: 'コダック',   romaji: 'kodakku',  alts: ['psyduck'],             el: 'water',    emoji: '💧' },
+  { name: 'ヤドン',     romaji: 'yadon',    alts: ['slowpoke'],            el: 'water',    emoji: '💧' },
+  { name: 'ガブリアス', romaji: 'gaburiasu', alts: ['garchomp'],           el: 'dragon',   emoji: '🐉' },
+  { name: 'レックウザ', romaji: 'rekkuza',  alts: ['rekkuuza', 'rekkuza', 'rayquaza'], el: 'dragon', emoji: '🐉' },
+  { name: 'ルギア',     romaji: 'rugia',    alts: ['lugia'],               el: 'psychic',  emoji: '🌊' },
+  { name: 'ミミッキュ', romaji: 'mimikkyu', alts: ['mimikyu', 'mimikkyu', 'mimikyu'], el: 'ghost', emoji: '👻' },
+  { name: 'ドラパルト', romaji: 'doraparuto', alts: ['dragapult'],         el: 'dragon',   emoji: '🐉' },
+];
+
+function pokeColor(el) { return POKE_TYPE_COLOR[el] || '#A0A07A'; }
+
+function getPokemonSet() { return shuffle(POKEMON); }

@@ -19,7 +19,7 @@
  *  8. Set FIREBASE_ENABLED = true
  */
 
-const firebaseConfig = {
+const FIREBASE_CONFIG = {
   apiKey: "AIzaSyAwAfjdcKQnrPp4fSQvgfb6a3W1f-uYmmc",
   authDomain: "japanese-b6298.firebaseapp.com",
   projectId: "japanese-b6298",

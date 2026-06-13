@@ -2,11 +2,17 @@
    CSS CUSTOM PROPERTIES
 ═══════════════════════════════════════════════════════════════ */
 :root {
-  --primary:        #FF4B4B;
-  --primary-light:  #FF7B7B;
-  --primary-dark:   #CC3B3B;
-  --secondary:      #1CB0F6;
-  --accent:         #FFC800;
+  /* ── Pokémon palette ──────────────────────────────────────────
+     Pokéball red + logo electric-yellow + Lucario blue.
+     Inspired by Zeraora (yellow), Lucario (blue), Zoroark (red). */
+  --primary:        #EE1515;   /* Pokéball red */
+  --primary-light:  #F35B5B;
+  --primary-dark:   #B81111;
+  --secondary:      #3B6CB7;   /* Lucario blue */
+  --accent:         #FFCB05;   /* Pokémon electric yellow */
+  --poke-blue:      #3B6CB7;
+  --poke-yellow:    #FFCB05;
+  --poke-dark:      #2A2A35;   /* Zoroark black */
   --success:        #58CC02;
   --success-dark:   #46A302;
   --danger:         #FF4B4B;
@@ -1869,3 +1875,248 @@ svg    { display: block; }
   margin: 20px 0 10px;
   padding-left: 2px;
 }
+
+/* ═══════════════════════════════════════════════════════════════
+   POKÉMON THEME ADDITIONS
+═══════════════════════════════════════════════════════════════ */
+
+/* ── Poké Ball logo (navbar) ───────────────────────────────── */
+.logo-pokeball {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  border: 2.5px solid var(--poke-dark);
+  background:
+    linear-gradient(to bottom,
+      var(--primary) 0%, var(--primary) calc(50% - 2px),
+      var(--poke-dark) calc(50% - 2px), var(--poke-dark) calc(50% + 2px),
+      #fff calc(50% + 2px), #fff 100%);
+  position: relative;
+  flex-shrink: 0;
+  box-shadow: var(--shadow-sm);
+}
+.logo-pokeball::after {
+  content: '';
+  position: absolute;
+  top: 50%; left: 50%;
+  width: 7px; height: 7px;
+  transform: translate(-50%, -50%);
+  background: #fff;
+  border: 2.5px solid var(--poke-dark);
+  border-radius: 50%;
+}
+
+/* Hide nav stats/actions on the login gate */
+body.logged-out .nav-stats,
+body.logged-out .nav-actions { display: none; }
+
+/* ── Featured Pokémon module card ──────────────────────────── */
+.module-poke {
+  background: linear-gradient(135deg, var(--primary) 0%, #C2342E 60%, var(--poke-dark) 100%);
+  color: #fff;
+  border: none;
+}
+.module-poke .mc-body h3 { color: #fff; }
+.module-poke .mc-body p  { color: rgba(255,255,255,0.85); }
+.module-poke .mc-icon    { filter: drop-shadow(0 2px 4px rgba(0,0,0,.3)); }
+.module-poke .mc-arrow   { color: #fff; }
+
+/* ═══════════════════════════════════════════════════════════════
+   LOGIN PAGE
+═══════════════════════════════════════════════════════════════ */
+.login-page {
+  max-width: 440px;
+  margin: 0 auto;
+  padding: 24px 20px 60px;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  min-height: calc(100vh - var(--nav-height));
+  justify-content: center;
+}
+.login-hero { text-align: center; }
+.login-pokeball {
+  width: 72px; height: 72px;
+  margin: 0 auto 16px;
+  border-radius: 50%;
+  border: 5px solid var(--poke-dark);
+  background:
+    linear-gradient(to bottom,
+      var(--primary) 0%, var(--primary) calc(50% - 3px),
+      var(--poke-dark) calc(50% - 3px), var(--poke-dark) calc(50% + 3px),
+      #fff calc(50% + 3px), #fff 100%);
+  position: relative;
+  box-shadow: var(--shadow-lg);
+  animation: ball-bob 2.4s ease-in-out infinite;
+}
+.login-pokeball::after {
+  content: '';
+  position: absolute;
+  top: 50%; left: 50%;
+  width: 20px; height: 20px;
+  transform: translate(-50%, -50%);
+  background: #fff;
+  border: 5px solid var(--poke-dark);
+  border-radius: 50%;
+}
+@keyframes ball-bob {
+  0%, 100% { transform: translateY(0) rotate(-4deg); }
+  50%      { transform: translateY(-8px) rotate(4deg); }
+}
+.login-title { font-size: 2rem; font-weight: 900; letter-spacing: -0.5px; }
+.login-poke-tag {
+  background: var(--accent);
+  color: var(--poke-dark);
+  font-size: 0.95rem;
+  padding: 2px 10px;
+  border-radius: var(--radius-full);
+  vertical-align: middle;
+  box-shadow: var(--shadow-sm);
+}
+.login-sub { color: var(--text-secondary); margin-top: 6px; font-weight: 600; }
+.login-mascots {
+  display: flex;
+  justify-content: center;
+  gap: 12px;
+  margin-top: 18px;
+}
+.login-mascot {
+  background: var(--surface);
+  border: 2px solid var(--mc, var(--border));
+  border-radius: var(--radius-md);
+  padding: 10px 8px;
+  min-width: 80px;
+  box-shadow: var(--shadow-sm);
+}
+.lm-emoji { font-size: 1.6rem; display: block; }
+.lm-name  { font-size: 0.75rem; font-weight: 800; color: var(--mc); margin-top: 4px; display: block; }
+
+.login-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 22px;
+  box-shadow: var(--shadow-lg);
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   POKÉMON GAME — Catch-'em Typing Battle
+═══════════════════════════════════════════════════════════════ */
+.poke-howto {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.poke-howto-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--surface-2);
+  border-left: 4px solid var(--mc, var(--primary));
+  border-radius: var(--radius-sm);
+  padding: 8px 12px;
+}
+.phi-emoji { font-size: 1.3rem; }
+.phi-name  { font-weight: 800; font-size: 1.1rem; }
+.phi-rom   { color: var(--text-muted); font-size: 0.85rem; margin-left: auto; }
+
+.poke-arena {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 240px;
+  margin: 16px 0;
+}
+.poke-card {
+  background: var(--surface);
+  border: 3px solid var(--mc, var(--primary));
+  border-radius: var(--radius-xl);
+  padding: 24px 28px;
+  text-align: center;
+  box-shadow: var(--shadow-lg);
+  width: 100%;
+  max-width: 340px;
+  position: relative;
+  transition: transform var(--bounce);
+}
+.poke-emoji { font-size: 3.4rem; line-height: 1; }
+.poke-name {
+  font-family: 'Noto Sans JP', sans-serif;
+  font-size: 2.4rem;
+  font-weight: 700;
+  margin-top: 8px;
+  color: var(--text);
+  letter-spacing: 2px;
+}
+.poke-el-tag {
+  display: inline-block;
+  margin-top: 8px;
+  font-size: 0.7rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: #fff;
+  background: var(--mc, var(--primary));
+  padding: 3px 12px;
+  border-radius: var(--radius-full);
+}
+.poke-flee-bar {
+  margin-top: 16px;
+  height: 8px;
+  background: var(--surface-2);
+  border-radius: var(--radius-full);
+  overflow: hidden;
+}
+.poke-flee-fill {
+  height: 100%;
+  width: 100%;
+  background: linear-gradient(90deg, var(--success) 0%, var(--accent) 60%, var(--danger) 100%);
+  border-radius: var(--radius-full);
+}
+.poke-result-badge {
+  position: absolute;
+  left: 50%; bottom: -14px;
+  transform: translateX(-50%);
+  white-space: nowrap;
+  font-weight: 800;
+  font-size: 0.85rem;
+  padding: 5px 14px;
+  border-radius: var(--radius-full);
+  box-shadow: var(--shadow-md);
+}
+.poke-result-caught { background: var(--success); color: #fff; }
+.poke-result-fled   { background: var(--danger);  color: #fff; }
+.poke-card.caught-flash { animation: poke-caught 0.5s ease; }
+.poke-card.fled-flash   { animation: poke-fled   0.5s ease; }
+@keyframes poke-caught {
+  0% { transform: scale(1); }
+  40% { transform: scale(1.08) rotate(2deg); box-shadow: 0 0 0 6px color-mix(in srgb, var(--success) 40%, transparent); }
+  100% { transform: scale(1); }
+}
+@keyframes poke-fled {
+  0%, 100% { transform: translateX(0); }
+  20% { transform: translateX(-10px); }
+  40% { transform: translateX(10px); opacity: 0.7; }
+  60% { transform: translateX(-8px); }
+  80% { transform: translateX(8px); }
+}
+
+/* ── End-screen Pokédex grid ───────────────────────────────── */
+.poke-dex-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(92px, 1fr));
+  gap: 10px;
+}
+.poke-dex-card {
+  background: var(--surface);
+  border: 2px solid var(--mc, var(--border));
+  border-radius: var(--radius-md);
+  padding: 10px 6px;
+  text-align: center;
+  box-shadow: var(--shadow-sm);
+}
+.poke-dex-card.fled { opacity: 0.6; filter: grayscale(0.5); }
+.pdc-emoji { font-size: 1.5rem; display: block; }
+.pdc-name  { font-family: 'Noto Sans JP', sans-serif; font-weight: 700; font-size: 0.9rem; display: block; margin-top: 2px; }
+.pdc-rom   { font-size: 0.7rem; color: var(--text-muted); display: block; }

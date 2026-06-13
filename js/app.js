@@ -45,6 +45,27 @@ const App = {
     checked: false,
   },
 
+  poke: {
+    timeLimit:   60,
+    fleeTime:    6,     // seconds before a Pokémon flees
+    playing:     false,
+    timeLeft:    60,
+    score:       0,
+    combo:       0,
+    maxCombo:    0,
+    caught:      0,
+    fled:        0,
+    total:       0,
+    current:     null,
+    queue:       [],
+    caughtDex:   [],   // unique Pokémon caught this session
+    fledList:    [],   // Pokémon that got away
+    timer:       null, // session countdown
+    fleeTimer:   null, // per-Pokémon flee countdown
+    fleeLeft:    0,
+    results:     null,
+  },
+
   vocab: {
     category: 'animals',
     mode: 'learn',
@@ -71,15 +92,38 @@ function navigate(route, params = {}) {
   window.scrollTo(0, 0);
 }
 
+/*
+ * needsLogin — true when the login gate must block the app.
+ * Only applies when Firebase is on; if it's off the app is fully
+ * usable offline (localStorage only) with no gate.
+ */
+function needsLogin() {
+  const firebaseOn = typeof FIREBASE_ENABLED !== 'undefined' && FIREBASE_ENABLED;
+  return firebaseOn && !App.user;
+}
+
 function render() {
   const app = document.getElementById('app');
+
+  /* ── Login gate ──────────────────────────────────────────────
+     Logged out → only the login page is reachable.
+     Logged in  → the /login route bounces to the dashboard. */
+  if (needsLogin())            App.route = '/login';
+  else if (App.route === '/login') App.route = '/';
+
+  document.body.classList.toggle('logged-out', App.route === '/login');
+
   const routes = {
+    '/login':              renderLogin,
     '/':                   renderDashboard,
     '/kana-reading':       renderKanaSetup,
     '/kana-reading/play':  renderKanaGame,
     '/kana-reading/end':   renderKanaEnd,
     '/kana-writing':       renderWriteSetup,
     '/kana-writing/play':  renderWriteGame,
+    '/pokemon':            renderPokeSetup,
+    '/pokemon/play':       renderPokeGame,
+    '/pokemon/end':        renderPokeEnd,
     '/vocabulary':         renderVocabMenu,
     '/vocabulary/mode':    renderVocabModeSelect,
     '/vocabulary/learn':   renderVocabLearn,
@@ -96,6 +140,8 @@ function render() {
 }
 
 function afterRender() {
+  if (App.route === '/login')             initLoginUI();
+  if (App.route === '/pokemon/play')      initPokeGameUI();
   if (App.route === '/kana-reading/play') initKanaGameUI();
   if (App.route === '/kana-writing/play') initWriteCanvas();
   if (App.route === '/vocabulary/quiz')   attachQuizEvents();
@@ -295,6 +341,18 @@ function renderDashboard() {
       <div class="stat-number">${p.vocabLearned.length}</div>
       <div class="stat-label">📖 Vocab</div>
     </div>
+  </div>
+
+  <h2 class="section-title">Featured</h2>
+  <div class="module-grid">
+    <button class="module-card module-poke" onclick="navigate('/pokemon')">
+      <div class="mc-icon">🔴</div>
+      <div class="mc-body">
+        <h3>Catch-'em Typing Battle</h3>
+        <p>Read Pokémon names in katakana &amp; catch them before they flee!</p>
+      </div>
+      <div class="mc-arrow">→</div>
+    </button>
   </div>
 
   <h2 class="section-title">Practice</h2>
@@ -1923,6 +1981,504 @@ function renderProfile() {
 /* ═══════════════════════════════════════════════════════════════
    AUTH MODAL
 ═══════════════════════════════════════════════════════════════ */
+/* ═══════════════════════════════════════════════════════════════
+   LOGIN PAGE  (full-screen gate — shown before any games)
+═══════════════════════════════════════════════════════════════ */
+function renderLogin() {
+  const stars = POKEMON.filter(p => p.star);
+  return `
+<div class="login-page">
+  <div class="login-hero">
+    <div class="login-pokeball"></div>
+    <h1 class="login-title">Koharu <span class="login-poke-tag">Poké</span></h1>
+    <p class="login-sub">Log in to start your Japanese training journey</p>
+    <div class="login-mascots">
+      ${stars.map(p => `
+        <div class="login-mascot" style="--mc:${pokeColor(p.el)}" title="${p.name}">
+          <span class="lm-emoji">${p.emoji}</span>
+          <span class="lm-name">${p.name}</span>
+        </div>`).join('')}
+    </div>
+  </div>
+
+  <div class="login-card">
+    <div class="auth-tabs" role="tablist">
+      <button class="auth-tab active" data-tab="login"    onclick="switchLoginTab('login')">Log In</button>
+      <button class="auth-tab"        data-tab="register" onclick="switchLoginTab('register')">New Trainer</button>
+    </div>
+
+    <form id="page-login-form" class="auth-form" onsubmit="handlePageLogin(event)" novalidate>
+      <div class="auth-field">
+        <label for="page-login-email">Email</label>
+        <input type="email" id="page-login-email" autocomplete="email" required placeholder="you@example.com">
+      </div>
+      <div class="auth-field">
+        <label for="page-login-password">Password</label>
+        <input type="password" id="page-login-password" autocomplete="current-password" required placeholder="••••••••">
+      </div>
+      <p class="auth-error" id="page-login-error" hidden></p>
+      <button type="submit" class="btn btn-primary btn-wide btn-xl" id="page-login-submit">Log In ⚡</button>
+    </form>
+
+    <form id="page-register-form" class="auth-form" onsubmit="handlePageRegister(event)" novalidate hidden>
+      <div class="auth-field">
+        <label for="page-reg-username">Trainer Name</label>
+        <input type="text" id="page-reg-username" autocomplete="username" required
+               minlength="3" maxlength="20" placeholder="Ash">
+      </div>
+      <div class="auth-field">
+        <label for="page-reg-email">Email</label>
+        <input type="email" id="page-reg-email" autocomplete="email" required placeholder="you@example.com">
+      </div>
+      <div class="auth-field">
+        <label for="page-reg-password">Password <small>(min 6 chars)</small></label>
+        <input type="password" id="page-reg-password" autocomplete="new-password" required
+               minlength="6" placeholder="••••••••">
+      </div>
+      <p class="auth-error" id="page-register-error" hidden></p>
+      <button type="submit" class="btn btn-primary btn-wide btn-xl" id="page-register-submit">Create Account 🔴</button>
+    </form>
+  </div>
+</div>`;
+}
+
+function initLoginUI() {
+  document.getElementById('page-login-email')?.focus();
+}
+
+function switchLoginTab(tab) {
+  document.querySelectorAll('.login-card .auth-tab').forEach(t =>
+    t.classList.toggle('active', t.dataset.tab === tab));
+  document.getElementById('page-login-form')?.toggleAttribute('hidden', tab !== 'login');
+  document.getElementById('page-register-form')?.toggleAttribute('hidden', tab !== 'register');
+  clearPageAuthErrors();
+}
+
+function clearPageAuthErrors() {
+  ['page-login-error','page-register-error'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) { el.textContent = ''; el.setAttribute('hidden',''); }
+  });
+}
+
+function showPageAuthError(formType, msg) {
+  const el = document.getElementById(`page-${formType}-error`);
+  if (!el) return;
+  el.textContent = msg;
+  el.removeAttribute('hidden');
+}
+
+function setPageAuthLoading(formType, loading) {
+  const btn = document.getElementById(`page-${formType}-submit`);
+  if (!btn) return;
+  btn.disabled    = loading;
+  btn.textContent = loading
+    ? (formType === 'login' ? 'Logging in…' : 'Creating account…')
+    : (formType === 'login' ? 'Log In ⚡' : 'Create Account 🔴');
+}
+
+async function handlePageLogin(e) {
+  e.preventDefault();
+  clearPageAuthErrors();
+  const email    = document.getElementById('page-login-email')?.value.trim();
+  const password = document.getElementById('page-login-password')?.value;
+  if (!email || !password) return;
+  setPageAuthLoading('login', true);
+  try {
+    await Auth.signIn(email, password);
+    /* onAuthStateChanged handles the redirect into the app */
+    toast('Welcome back, trainer!', 'success');
+  } catch (err) {
+    showPageAuthError('login', err.message);
+  } finally {
+    setPageAuthLoading('login', false);
+  }
+}
+
+async function handlePageRegister(e) {
+  e.preventDefault();
+  clearPageAuthErrors();
+  const username = document.getElementById('page-reg-username')?.value.trim();
+  const email    = document.getElementById('page-reg-email')?.value.trim();
+  const password = document.getElementById('page-reg-password')?.value;
+  if (!username || !email || !password) return;
+  setPageAuthLoading('register', true);
+  try {
+    await Auth.signUp(email, password, username);
+    toast(`Account created — welcome, ${username}!`, 'success');
+  } catch (err) {
+    showPageAuthError('register', err.message);
+  } finally {
+    setPageAuthLoading('register', false);
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   POKÉMON  —  "Catch-'em Typing Battle"
+   Read the katakana name and type its reading to catch each Pokémon
+   before it flees.  Same XP / combo engine as the kana games.
+═══════════════════════════════════════════════════════════════ */
+function renderPokeSetup() {
+  const stars = POKEMON.filter(p => p.star);
+  return `
+<div class="setup-page">
+  <button class="back-btn" onclick="navigate('/')">← Back</button>
+  <h1 class="page-title">🔴 Catch-'em Typing Battle</h1>
+  <p class="page-sub">A wild Pokémon appears! Read its katakana name and type the reading to catch it — before it flees.</p>
+
+  <div class="setup-card">
+    <div class="poke-howto">
+      ${stars.map(p => `
+        <div class="poke-howto-item" style="--mc:${pokeColor(p.el)}">
+          <span class="phi-emoji">${p.emoji}</span>
+          <span class="phi-name">${p.name}</span>
+          <span class="phi-rom">→ type "${p.romaji}"</span>
+        </div>`).join('')}
+    </div>
+
+    <h3 class="setup-section-title">Battle Length</h3>
+    <div class="option-group" id="poke-time-group">
+      <button class="option-btn" data-val="30"  onclick="selectOption(this,'poke-time-group',v=>App.poke.timeLimit=+v)">
+        <span class="opt-icon">⚡</span><span>30 sec</span>
+      </button>
+      <button class="option-btn active" data-val="60" onclick="selectOption(this,'poke-time-group',v=>App.poke.timeLimit=+v)">
+        <span class="opt-icon">⏱</span><span>60 sec</span>
+      </button>
+      <button class="option-btn" data-val="120" onclick="selectOption(this,'poke-time-group',v=>App.poke.timeLimit=+v)">
+        <span class="opt-icon">🧘</span><span>120 sec</span>
+      </button>
+    </div>
+  </div>
+
+  <button class="btn btn-primary btn-wide btn-xl" onclick="startPokeGame()">
+    Start Battle 🔴
+  </button>
+</div>`;
+}
+
+function startPokeGame() {
+  const s = App.poke;
+  s.queue     = getPokemonSet();
+  s.score     = 0;
+  s.combo     = 0;
+  s.maxCombo  = 0;
+  s.caught    = 0;
+  s.fled      = 0;
+  s.total     = 0;
+  s.caughtDex = [];
+  s.fledList  = [];
+  s.timeLeft  = s.timeLimit;
+  s.playing   = true;
+  s.current   = null;
+  navigate('/pokemon/play');
+}
+
+function renderPokeGame() {
+  const s = App.poke;
+  return `
+<div class="game-page poke-game" id="poke-game-page">
+  <div class="game-header">
+    <div class="game-stat">
+      <span class="gs-label">Score</span>
+      <span class="gs-val" id="pk-score">0</span>
+    </div>
+    <div class="timer-wrap">
+      <svg class="timer-ring" viewBox="0 0 64 64">
+        <circle class="timer-track" cx="32" cy="32" r="28"/>
+        <circle class="timer-progress" id="pk-timer-ring" cx="32" cy="32" r="28"
+          stroke-dasharray="175.9" stroke-dashoffset="0"/>
+      </svg>
+      <span class="timer-text" id="pk-timer">${s.timeLimit}</span>
+    </div>
+    <div class="game-stat">
+      <span class="gs-label">Combo</span>
+      <span class="gs-val combo-val" id="pk-combo">×0</span>
+    </div>
+  </div>
+
+  <div class="poke-arena" id="poke-arena">
+    <div class="poke-card" id="poke-card">
+      <div class="poke-emoji" id="poke-emoji">❓</div>
+      <div class="poke-name" id="poke-name">？？？</div>
+      <div class="poke-el-tag" id="poke-el-tag"></div>
+      <div class="poke-flee-bar"><div class="poke-flee-fill" id="poke-flee-fill"></div></div>
+      <div class="poke-result-badge" id="poke-result" hidden></div>
+    </div>
+  </div>
+
+  <div class="kana-input-row">
+    <input type="text" id="poke-input" class="kana-input"
+      placeholder="Type the reading and press Enter…"
+      autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
+      onkeydown="handlePokeInput(event)" />
+  </div>
+
+  <div class="game-footer-stats">
+    <span id="pk-caught">Caught: 0</span>
+    <span id="pk-best">Best combo: 0</span>
+  </div>
+
+  <button class="btn btn-ghost btn-sm" onclick="endPokeGame()">End Battle</button>
+</div>`;
+}
+
+function initPokeGameUI() {
+  const s = App.poke;
+  nextPokemon();
+
+  const circumference = 175.9;
+  let elapsed = 0;
+  s.timer = setInterval(() => {
+    s.timeLeft--;
+    elapsed++;
+    const el = document.getElementById('pk-timer');
+    if (el) el.textContent = s.timeLeft;
+    const bar = document.getElementById('pk-timer-ring');
+    if (bar) bar.style.strokeDashoffset = (elapsed / s.timeLimit) * circumference;
+    if (s.timeLeft <= 10) {
+      el?.classList.add('timer-warning');
+      if (s.timeLeft <= 5) Audio.warning();
+    }
+    if (s.timeLeft <= 0) endPokeGame();
+  }, 1000);
+
+  document.getElementById('poke-input')?.focus();
+}
+
+function nextPokemon() {
+  const s = App.poke;
+  if (s.fleeTimer) { clearInterval(s.fleeTimer); s.fleeTimer = null; }
+  if (s.queue.length === 0) s.queue = getPokemonSet();
+  s.current = s.queue.pop();
+
+  /* Fair flee window: longer names get a little more time */
+  const fleeMax = 4 + s.current.name.length * 0.6;
+  s.fleeLeft = fleeMax;
+
+  const color = pokeColor(s.current.el);
+  const card  = document.getElementById('poke-card');
+  const emoji = document.getElementById('poke-emoji');
+  const name  = document.getElementById('poke-name');
+  const tag   = document.getElementById('poke-el-tag');
+  const fill  = document.getElementById('poke-flee-fill');
+
+  if (card)  card.style.setProperty('--mc', color);
+  if (emoji) { emoji.textContent = s.current.emoji; }
+  if (name)  name.textContent  = s.current.name;
+  if (tag)   tag.textContent   = s.current.el;
+  if (card)  {
+    card.classList.remove('caught-flash', 'fled-flash');
+    void card.offsetWidth;
+    card.classList.add('pop-in');
+    setTimeout(() => card.classList.remove('pop-in'), 300);
+  }
+  if (fill)  { fill.style.transition = 'none'; fill.style.width = '100%'; }
+
+  /* Per-Pokémon flee countdown (100ms ticks) */
+  const tick = 0.1;
+  s.fleeTimer = setInterval(() => {
+    s.fleeLeft -= tick;
+    const pct = Math.max(0, (s.fleeLeft / fleeMax) * 100);
+    const f = document.getElementById('poke-flee-fill');
+    if (f) { f.style.transition = 'width 0.1s linear'; f.style.width = pct + '%'; }
+    if (s.fleeLeft <= 0) fleePokemon();
+  }, 100);
+}
+
+function handlePokeInput(e) {
+  const s = App.poke;
+  if (!s.current || !s.playing) return;
+  if (e.type !== 'keydown' || e.key !== 'Enter') return;
+
+  const input = e.target;
+  const val   = input.value.toLowerCase().trim();
+  if (!val) return;
+
+  const valid = [s.current.romaji, ...(s.current.alts || [])].map(v => v.toLowerCase());
+  if (valid.includes(val)) {
+    input.value = '';
+    catchPokemon();
+  } else {
+    /* Wrong guess — let them retry until the Pokémon flees */
+    flashInputWrong(input);
+    Audio.wrong();
+  }
+}
+
+function catchPokemon() {
+  const s = App.poke;
+  if (s.fleeTimer) { clearInterval(s.fleeTimer); s.fleeTimer = null; }
+  s.combo++;
+  s.caught++;
+  s.total++;
+  if (s.combo > s.maxCombo) s.maxCombo = s.combo;
+  /* Speed bonus: catching with more of the flee bar left scores more */
+  const speedBonus = Math.round(s.fleeLeft * 2);
+  s.score += Math.round((15 + speedBonus) * Math.min(1 + (s.combo - 1) * 0.1, 3));
+  if (!s.caughtDex.find(p => p.name === s.current.name)) s.caughtDex.push(s.current);
+
+  Audio.correct();
+  if (s.combo >= 5) Audio.combo();
+  showPokeResult('caught', `✓ Caught ${s.current.name}!`);
+  flashPokeCard('caught');
+  updatePokeUI();
+
+  setTimeout(() => { hidePokeResult(); nextPokemon(); document.getElementById('poke-input')?.focus(); }, 450);
+}
+
+function fleePokemon() {
+  const s = App.poke;
+  if (s.fleeTimer) { clearInterval(s.fleeTimer); s.fleeTimer = null; }
+  if (!s.playing) return;
+  s.fled++;
+  s.total++;
+  s.combo = 0;
+  if (!s.fledList.find(p => p.name === s.current.name)) s.fledList.push(s.current);
+
+  Audio.wrong();
+  showPokeResult('fled', `✗ ${s.current.name} fled!  (${s.current.romaji})`);
+  flashPokeCard('fled');
+  const inp = document.getElementById('poke-input');
+  if (inp) inp.value = '';
+  updatePokeUI();
+
+  setTimeout(() => { hidePokeResult(); nextPokemon(); document.getElementById('poke-input')?.focus(); }, 900);
+}
+
+function showPokeResult(type, text) {
+  const el = document.getElementById('poke-result');
+  if (!el) return;
+  el.textContent = text;
+  el.className = `poke-result-badge poke-result-${type}`;
+  el.removeAttribute('hidden');
+}
+function hidePokeResult() {
+  document.getElementById('poke-result')?.setAttribute('hidden', '');
+}
+function flashPokeCard(type) {
+  const el = document.getElementById('poke-card');
+  if (!el) return;
+  el.classList.add(`${type}-flash`);
+  setTimeout(() => el.classList.remove(`${type}-flash`), 500);
+}
+
+function updatePokeUI() {
+  const s = App.poke;
+  const score = document.getElementById('pk-score');
+  const combo = document.getElementById('pk-combo');
+  const caught = document.getElementById('pk-caught');
+  const best  = document.getElementById('pk-best');
+  if (score) score.textContent = s.score;
+  if (combo) {
+    combo.textContent = `×${s.combo}`;
+    combo.className = `gs-val combo-val${s.combo >= 5 ? ' combo-hot' : ''}`;
+  }
+  if (caught) caught.textContent = `Caught: ${s.caught}`;
+  if (best)   best.textContent   = `Best combo: ${s.maxCombo}`;
+}
+
+/* Unique katakana characters across a list of Pokémon (for mastery tracking) */
+function pokeChars(list) {
+  const set = new Set();
+  list.forEach(p => { for (const ch of p.name) if (ch !== 'ー') set.add(ch); });
+  return [...set];
+}
+
+function endPokeGame() {
+  const s = App.poke;
+  if (s.timer)     { clearInterval(s.timer);     s.timer = null; }
+  if (s.fleeTimer) { clearInterval(s.fleeTimer); s.fleeTimer = null; }
+  s.playing = false;
+
+  const total    = s.total || 1;
+  const accuracy = Math.round((s.caught / total) * 100);
+  const accuracyBonus = accuracy >= 90 ? 20 : accuracy >= 75 ? 10 : accuracy >= 50 ? 5 : 0;
+  const xpBase   = s.caught * 5 + Math.floor(s.maxCombo / 2) + accuracyBonus;
+
+  const xpResult = Progress.recordGameSession({
+    correctChars: pokeChars(s.caughtDex),
+    kanaResults:  pokeChars(s.fledList).map(char => ({ char })),
+    xp:        xpBase,
+    score:     s.score,
+    maxCombo:  s.maxCombo,
+    correct:   s.caught,
+    total,
+    timeLimit: s.timeLimit,
+  });
+
+  s.results = {
+    score: s.score, caught: s.caught, fled: s.fled, total,
+    accuracy, maxCombo: s.maxCombo,
+    caughtDex: [...s.caughtDex], fledList: [...s.fledList], xp: xpBase,
+  };
+
+  navigate('/pokemon/end');
+  setTimeout(() => {
+    showXpBurst(xpBase);
+    if (xpResult.leveledUp) setTimeout(() => showLevelUp(xpResult.newLevelInfo), 800);
+  }, 200);
+}
+
+function renderPokeEnd() {
+  const r = App.poke.results;
+  if (!r) return renderPokeSetup();
+
+  const grade = r.accuracy >= 90 ? { label:'Pokémon Master!', icon:'🏆', color:'#f59e0b' }
+              : r.accuracy >= 70 ? { label:'Gym Leader!',     icon:'🥇', color:'#22c55e' }
+              : r.accuracy >= 50 ? { label:'Trainer!',        icon:'🎒', color:'#3b82f6' }
+              :                    { label:'Keep Training!',  icon:'💪', color:'#8b5cf6' };
+
+  return `
+<div class="end-page">
+  <div class="end-grade" style="--grade-color:${grade.color}">
+    <span class="end-grade-icon">${grade.icon}</span>
+    <span class="end-grade-label">${grade.label}</span>
+  </div>
+
+  <div class="end-score-big">${r.score}</div>
+  <p class="end-score-label">Score</p>
+
+  <div class="end-stats-grid">
+    <div class="end-stat"><span class="end-stat-val">${r.caught}</span><span class="end-stat-label">Caught</span></div>
+    <div class="end-stat"><span class="end-stat-val">${r.accuracy}%</span><span class="end-stat-label">Catch Rate</span></div>
+    <div class="end-stat"><span class="end-stat-val">×${r.maxCombo}</span><span class="end-stat-label">Best Combo</span></div>
+    <div class="end-stat"><span class="end-stat-val end-stat-xp">+${r.xp}</span><span class="end-stat-label">XP Earned</span></div>
+  </div>
+
+  ${r.caughtDex.length ? `
+  <div class="missed-section">
+    <h3>Pokédex — Caught (${r.caughtDex.length})</h3>
+    <div class="poke-dex-grid">
+      ${r.caughtDex.map(p => `
+        <div class="poke-dex-card" style="--mc:${pokeColor(p.el)}">
+          <span class="pdc-emoji">${p.emoji}</span>
+          <span class="pdc-name">${p.name}</span>
+          <span class="pdc-rom">${p.romaji}</span>
+        </div>`).join('')}
+    </div>
+  </div>` : ''}
+
+  ${r.fledList.length ? `
+  <div class="missed-section">
+    <h3>Got Away (${r.fledList.length})</h3>
+    <div class="poke-dex-grid">
+      ${r.fledList.map(p => `
+        <div class="poke-dex-card fled" style="--mc:${pokeColor(p.el)}">
+          <span class="pdc-emoji">${p.emoji}</span>
+          <span class="pdc-name">${p.name}</span>
+          <span class="pdc-rom">${p.romaji}</span>
+        </div>`).join('')}
+    </div>
+  </div>` : `<p class="perfect-msg">Caught them all! 🎉</p>`}
+
+  <div class="end-actions">
+    <button class="btn btn-primary" onclick="startPokeGame()">Battle Again</button>
+    <button class="btn btn-secondary" onclick="navigate('/pokemon')">Change Settings</button>
+    <button class="btn btn-ghost" onclick="navigate('/')">Home</button>
+  </div>
+</div>`;
+}
+
 function openAuthModal() {
   const overlay = document.getElementById('auth-modal-overlay');
   if (!overlay) return;
@@ -2058,9 +2614,12 @@ function init() {
             await CloudSync.migrateFromLocalStorage(user.uid);
           }
         }
-        updateNavStats();
-        if (App.route === '/') render();
+        Progress.updateStreak();
+        /* Leave the login gate and enter the app */
+        if (App.route === '/login') App.route = '/';
       }
+      /* Re-render so the login gate opens (sign-in) or closes (sign-out) */
+      render();
     });
   }
 

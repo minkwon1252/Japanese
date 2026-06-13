@@ -14,7 +14,7 @@
   <!-- ── Navigation ──────────────────────────────────────────── -->
   <nav class="navbar" id="navbar">
     <button class="nav-logo" onclick="navigate('/')">
-      <span class="logo-sakura">🌸</span>
+      <span class="logo-pokeball" aria-hidden="true"></span>
       <span class="logo-text">Koharu</span>
     </button>
 
@@ -128,15 +128,10 @@
     </div>
   </div>
 
-  <!-- ── Firebase SDK (loaded only when config is present) ────── -->
-  <!--
-    Uncomment these three lines once you have set FIREBASE_ENABLED = true
-    in js/firebase-config.js
-
+  <!-- ── Firebase SDK (required when FIREBASE_ENABLED = true) ──── -->
   <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
-  -->
 
   <!-- ── Application scripts ──────────────────────────────────── -->
   <script src="js/firebase-config.js"></script>
