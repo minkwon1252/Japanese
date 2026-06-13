@@ -1125,6 +1125,18 @@ function setupDrawEvents(canvas) {
   canvas.addEventListener('touchend',   end,   { passive: false });
 }
 
+/* Largest "bold Npx" font whose rendered width for `text` fits maxWidth.
+   Single kana stay big; wide combos (きゃ, しゅ…) shrink to fit the box. */
+function fitKanaFont(ctx, text, maxWidth, startPx) {
+  let size = startPx;
+  ctx.font = `bold ${size}px "Noto Sans JP", serif`;
+  while (size > 48 && ctx.measureText(text).width > maxWidth) {
+    size -= 6;
+    ctx.font = `bold ${size}px "Noto Sans JP", serif`;
+  }
+  return ctx.font;
+}
+
 function drawGuide(char, hintLevel) {
   if (!guideCtx) return;
   guideCtx.clearRect(0, 0, 360, 360);
@@ -1133,9 +1145,9 @@ function drawGuide(char, hintLevel) {
 
   const draw = () => {
     guideCtx.clearRect(0, 0, 360, 360);
-    guideCtx.font = 'bold 260px "Noto Sans JP", serif';
     guideCtx.textAlign    = 'center';
     guideCtx.textBaseline = 'middle';
+    guideCtx.font         = fitKanaFont(guideCtx, char, 320, 260);
     guideCtx.fillStyle    = 'rgba(150,150,150,0.25)';
     guideCtx.fillText(char, 180, 190);
   };
@@ -1176,8 +1188,8 @@ function checkWriting() {
   const pct = Math.round(similarity * 100);
 
   let verdict, color;
-  if (pct >= 55)      { verdict = 'Great! ✓';       color = '#58cc02'; s.correct++; }
-  else if (pct >= 35) { verdict = 'Close!';          color = '#f59e0b'; }
+  if (pct >= 50)      { verdict = 'Great! ✓';       color = '#58cc02'; s.correct++; }
+  else if (pct >= 30) { verdict = 'Close!';          color = '#f59e0b'; }
   else                { verdict = 'Keep Practicing'; color = '#ff4b4b'; }
 
   s.total++;
@@ -1210,61 +1222,113 @@ function checkWriting() {
 function drawReferenceOverlay(char) {
   if (!guideCtx) return;
   guideCtx.clearRect(0, 0, 360, 360);
-  guideCtx.font = 'bold 260px "Noto Sans JP", serif';
   guideCtx.textAlign    = 'center';
   guideCtx.textBaseline = 'middle';
+  guideCtx.font         = fitKanaFont(guideCtx, char, 320, 260);
   guideCtx.fillStyle    = 'rgba(88,204,2,0.2)';
   guideCtx.fillText(char, 180, 190);
 }
 
+/*
+ * compareWithReference — size & position-invariant shape match.
+ *
+ * Both the user's ink and the reference glyph are cropped to their
+ * bounding box and rescaled into the same normalized grid, so writing
+ * the character larger, smaller, or off-centre no longer hurts the
+ * score.  A small dilation absorbs stroke-width differences between a
+ * thick brush stroke and the thinner font outline.  Returns a Dice
+ * overlap coefficient in [0,1] (more forgiving than IoU).
+ */
 function compareWithReference(char) {
   if (!drawCanvas) return 0;
+  const W = 360, H = 360, SZ = 64, PAD = 6;
 
-  const ref = document.createElement('canvas');
-  ref.width  = 360;
-  ref.height = 360;
+  /* user ink — detected via alpha so it works in light OR dark theme */
+  const uData = drawCtx.getImageData(0, 0, W, H).data;
+  const uInk  = (x, y) => uData[(y * W + x) * 4 + 3] > 20;
+  const uBox  = inkBBox(uInk, W, H);
+  if (!uBox) return 0;
+
+  /* reference glyph rendered (fitted) on white, detected via brightness */
+  const ref  = document.createElement('canvas'); ref.width = W; ref.height = H;
   const rCtx = ref.getContext('2d');
-  rCtx.fillStyle = 'white';
-  rCtx.fillRect(0, 0, 360, 360);
-  rCtx.font = 'bold 260px "Noto Sans JP", serif';
-  rCtx.textAlign    = 'center';
-  rCtx.textBaseline = 'middle';
-  rCtx.fillStyle    = 'black';
-  rCtx.fillText(char, 180, 190);
+  rCtx.fillStyle = 'white'; rCtx.fillRect(0, 0, W, H);
+  rCtx.textAlign = 'center'; rCtx.textBaseline = 'middle'; rCtx.fillStyle = 'black';
+  rCtx.font = fitKanaFont(rCtx, char, 320, 260);
+  rCtx.fillText(char, W / 2, H / 2);
+  const rData = rCtx.getImageData(0, 0, W, H).data;
+  const rInk  = (x, y) => {
+    const i = (y * W + x) * 4;
+    return (rData[i] + rData[i + 1] + rData[i + 2]) / 3 < 160;
+  };
+  const rBox = inkBBox(rInk, W, H);
+  if (!rBox) return 0;
 
-  const blurUser = document.createElement('canvas');
-  blurUser.width  = 360;
-  blurUser.height = 360;
-  const buCtx = blurUser.getContext('2d');
-  buCtx.filter = 'blur(12px)';
-  buCtx.fillStyle = 'white';
-  buCtx.fillRect(0, 0, 360, 360);
-  buCtx.drawImage(drawCanvas, 0, 0);
+  let userN = dilate(normalizeMask(uInk, uBox, SZ, PAD), SZ);
+  let refN  = dilate(normalizeMask(rInk, rBox, SZ, PAD), SZ);
 
-  const blurRef = document.createElement('canvas');
-  blurRef.width  = 360;
-  blurRef.height = 360;
-  const brCtx = blurRef.getContext('2d');
-  brCtx.filter = 'blur(12px)';
-  brCtx.drawImage(ref, 0, 0);
-
-  const SZ = 64;
-  const sUser = document.createElement('canvas'); sUser.width = sUser.height = SZ;
-  const sRef  = document.createElement('canvas'); sRef.width  = sRef.height  = SZ;
-  sUser.getContext('2d').drawImage(blurUser, 0, 0, SZ, SZ);
-  sRef.getContext('2d').drawImage(blurRef,  0, 0, SZ, SZ);
-
-  const ud = sUser.getContext('2d').getImageData(0, 0, SZ, SZ).data;
-  const rd = sRef.getContext('2d').getImageData(0, 0, SZ, SZ).data;
-
-  let intersection = 0, unionCount = 0;
-  for (let i = 0; i < ud.length; i += 4) {
-    const u = (ud[i] + ud[i+1] + ud[i+2]) / 3 < 200;
-    const r = (rd[i] + rd[i+1] + rd[i+2]) / 3 < 200;
-    if (u && r) intersection++;
-    if (u || r) unionCount++;
+  let inter = 0, ua = 0, ra = 0;
+  for (let k = 0; k < userN.length; k++) {
+    if (userN[k] && refN[k]) inter++;
+    if (userN[k]) ua++;
+    if (refN[k])  ra++;
   }
-  return unionCount > 0 ? intersection / unionCount : 0;
+  return (ua + ra) > 0 ? (2 * inter) / (ua + ra) : 0;
+}
+
+/* Bounding box of all "ink" pixels, per the isInk(x,y) predicate. */
+function inkBBox(isInk, W, H) {
+  let minX = W, minY = H, maxX = -1, maxY = -1;
+  for (let y = 0; y < H; y++) {
+    for (let x = 0; x < W; x++) {
+      if (isInk(x, y)) {
+        if (x < minX) minX = x;
+        if (x > maxX) maxX = x;
+        if (y < minY) minY = y;
+        if (y > maxY) maxY = y;
+      }
+    }
+  }
+  if (maxX < 0) return null;
+  return { minX, minY, boxW: maxX - minX + 1, boxH: maxY - minY + 1 };
+}
+
+/* Crop `box` from the source and rescale (aspect-preserving, centred)
+   into an SZ×SZ binary mask. */
+function normalizeMask(isInk, box, SZ, PAD) {
+  const avail = SZ - 2 * PAD;
+  const scale = Math.min(avail / box.boxW, avail / box.boxH);
+  const drawW = box.boxW * scale, drawH = box.boxH * scale;
+  const offX  = (SZ - drawW) / 2, offY = (SZ - drawH) / 2;
+  const out   = new Uint8Array(SZ * SZ);
+  for (let ty = 0; ty < SZ; ty++) {
+    for (let tx = 0; tx < SZ; tx++) {
+      const lx = tx - offX, ly = ty - offY;
+      if (lx < 0 || ly < 0 || lx >= drawW || ly >= drawH) continue;
+      const sx = (box.minX + lx / scale) | 0;
+      const sy = (box.minY + ly / scale) | 0;
+      if (isInk(sx, sy)) out[ty * SZ + tx] = 1;
+    }
+  }
+  return out;
+}
+
+/* 3×3 dilation — grows each mask by one pixel to bridge stroke-width gaps. */
+function dilate(mask, SZ) {
+  const out = new Uint8Array(SZ * SZ);
+  for (let y = 0; y < SZ; y++) {
+    for (let x = 0; x < SZ; x++) {
+      let on = 0;
+      for (let dy = -1; dy <= 1 && !on; dy++) {
+        for (let dx = -1; dx <= 1; dx++) {
+          const nx = x + dx, ny = y + dy;
+          if (nx >= 0 && ny >= 0 && nx < SZ && ny < SZ && mask[ny * SZ + nx]) { on = 1; break; }
+        }
+      }
+      out[y * SZ + x] = on;
+    }
+  }
+  return out;
 }
 
 function nextWriteChar() {
